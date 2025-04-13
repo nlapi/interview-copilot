@@ -48,7 +48,7 @@
 import Assert from "assert-js"
 import LoadingIcon from "@/components/LoadingIcon.vue";
 import MyTimer from "@/components/MyTimer.vue";
-import Recorder from 'recorder-js';
+import RecordRTC from 'recordrtc';
 import OpenAI from "openai";
 import config_util from "../utils/config_util"
 
@@ -131,103 +131,75 @@ export default {
       this.currentText = ""
     },
     async startCopilot() {
-      this.copilot_starting = true
-      const openai_key = localStorage.getItem("openai_key")
-      const language = config_util.speech_language()
+      this.copilot_starting = true;
+      const openai_key = localStorage.getItem("openai_key");
+      const language = config_util.speech_language();
       
       try {
         if (!openai_key) {
-          throw new Error("You should setup Open AI API Token")
+          throw new Error("You should setup Open AI API Token");
         }
         
-        // Create audio context and recorder
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this.recorder = new Recorder(this.audioContext, {
-          onAnalysed: data => {
-            // Optional: You can use this for visualization if needed
-          }
-        });
-
+        console.log("Starting RecordRTC recording...");
+        
         // Get user media (microphone)
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        await this.recorder.init(stream);
-        this.recorder.start();
+        
+        // Configure RecordRTC
+        this.recorder = new RecordRTC(stream, {
+          type: 'audio',
+          mimeType: 'audio/webm',  // Use webm format which OpenAI accepts
+          recorderType: RecordRTC.StereoAudioRecorder,
+          numberOfAudioChannels: 1, // mono
+          desiredSampRate: 16000,  // 16 kHz as preferred by Whisper
+          timeSlice: 5000,  // 5 seconds segments
+          ondataavailable: (blob) => {
+            console.log("RecordRTC data available, blob size:", blob.size);
+            if (blob.size > 0 && this.isRecording) {
+              this.processAudioChunk(blob);
+            }
+          }
+        });
+        
+        // Start recording
+        this.recorder.startRecording();
         this.isRecording = true;
         
-        // Set up continuous transcription
-        this.audioChunks = [];
-        this.setupTranscriptionTimer();
-        
         // Start the UI components
-        this.copilot_starting = false
-        this.state = "ing"
-        this.$refs.MyTimer.start()
-        window.console.log("recognition started");
+        this.copilot_starting = false;
+        this.state = "ing";
+        this.$refs.MyTimer.start();
+        window.console.log("RecordRTC recording started");
       } catch (e) {
+        console.error("Failed to start recording:", e);
         this.currentText = "Start Failed: " + e.message;
-        this.copilot_starting = false
-        return
+        this.copilot_starting = false;
+        return;
       }
     },
     
-    setupTranscriptionTimer() {
-      // Transcribe every 5 seconds
-      this.transcribeTimer = setInterval(async () => {
-        if (this.isRecording) {
-          await this.transcribeAudio();
-        }
-      }, 5000);
-    },
-    
-    async transcribeAudio() {
+    // New method to process audio chunks
+    async processAudioChunk(blob) {
       try {
-        console.log("Starting transcription process");
-        // Stop recording temporarily to get the audio data
-        let buffer;
-        try {
-          const result = await this.recorder.stop();
-          buffer = result.buffer;
-          console.log("Recording stopped, got buffer:", buffer ? "Buffer received" : "No buffer");
-          console.log("Buffer type:", buffer ? typeof buffer : "N/A", "Buffer length:", buffer ? buffer.length : 0);
-        } catch (e) {
-          console.error("Error stopping recorder:", e);
-          throw new Error("Failed to get audio data: " + e.message);
-        }
+        console.log("Processing audio chunk, size:", blob.size, "bytes");
         
-        if (!buffer || buffer.length === 0) {
-          throw new Error("No audio data recorded. Please check your microphone permission and try speaking louder.");
-        }
-        
-        // We need to properly encode the audio as a WAV file
-        // First, check that we have a valid buffer
-        if (!buffer || !buffer.length) {
-          throw new Error("No audio data recorded");
-        }
-        
-        // For testing purposes, let's try MP3 format instead
-        // The recorder.js library should return WAV data already
-        const audioBlob = new Blob([buffer], { type: 'audio/mp3' });
-        console.log("Created audio blob, size:", audioBlob.size, "bytes");
-        
-        if (audioBlob.size < 100) {
-          throw new Error("Audio recording is too small (size: " + audioBlob.size + " bytes). Please try speaking louder.");
+        if (blob.size < 100) {
+          console.warn("Audio blob is too small, skipping transcription");
+          return;
         }
         
         // Send to OpenAI for transcription
         const apiKey = localStorage.getItem("openai_key");
         const language = config_util.speech_language();
-        console.log("Using language for transcription:", language);
+        
+        console.log("Sending audio for transcription, language:", language || "auto");
         
         const formData = new FormData();
-        formData.append('file', audioBlob, 'recording.mp3');  // Changed filename to match the MIME type
+        formData.append('file', blob, 'recording.webm');
         formData.append('model', 'whisper-1');
         if (language) {
           formData.append('language', language);
         }
-        
-        console.log("Sending transcription request to OpenAI");
-        // Use fetch for the API call
-        console.log("API Key length:", apiKey ? apiKey.length : 0);
         
         const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
@@ -240,7 +212,7 @@ export default {
         console.log("Got response from OpenAI:", response.status, response.statusText);
         
         if (!response.ok) {
-          // Try to get more info about the error
+          // Get detailed error information
           let errorText = response.statusText;
           try {
             const errorData = await response.json();
@@ -265,27 +237,19 @@ export default {
         
         if (text && text.trim()) {
           // Add the transcribed text to the display
-          this.currentText = this.currentText ? this.currentText + "\n" + text : text;
+          this.currentText = this.currentText ? this.currentText + " " + text : text;
           console.log("Added text to display:", text);
-        }
-        
-        // Restart recording
-        if (this.isRecording) {
-          console.log("Restarting recording");
-          await this.recorder.start();
+        } else {
+          console.log("No transcription returned or empty");
         }
       } catch (error) {
         console.error('Transcription error:', error.toString());
         console.error('Error details:', error.message, error.stack);
-        // Show error in the UI for debugging
         this.currentText += "\nError: " + error.toString();
-        // Restart recording despite error
-        if (this.isRecording) {
-          console.log("Restarting recording after error");
-          await this.recorder.start();
-        }
       }
     },
+    
+    // We don't need the setupTranscriptionTimer anymore since RecordRTC handles this with timeSlice
     
     async userStopCopilot() {
       this.copilot_stopping = true;
@@ -307,39 +271,62 @@ export default {
     },
     
     async cleanupRecording() {
-      // Clear the transcription timer
-      if (this.transcribeTimer) {
-        clearInterval(this.transcribeTimer);
-        this.transcribeTimer = null;
-      }
+      console.log("Cleaning up recording resources...");
       
-      // Do one final transcription if we're recording
-      if (this.isRecording && this.recorder) {
-        try {
-          await this.transcribeAudio();
-        } catch (e) {
-          console.error("Error during final transcription:", e);
-        }
-      }
-      
-      // Stop recording
+      // Stop recording first
       this.isRecording = false;
+      
+      // Clean up RecordRTC
       if (this.recorder) {
         try {
-          await this.recorder.stop();
+          // Get final audio and process it
+          console.log("Stopping RecordRTC and getting final audio...");
+          
+          const promise = new Promise((resolve) => {
+            this.recorder.stopRecording(() => {
+              try {
+                const blob = this.recorder.getBlob();
+                console.log("Final recording blob size:", blob.size);
+                
+                if (blob && blob.size > 1000) {
+                  // Process the final audio chunk if it's large enough
+                  this.processAudioChunk(blob);
+                }
+                
+                // Clean up recorder
+                this.recorder.destroy();
+                this.recorder = null;
+                resolve();
+              } catch (e) {
+                console.error("Error in RecordRTC stop callback:", e);
+                resolve();
+              }
+            });
+          });
+          
+          await promise;
         } catch (e) {
           console.error("Error stopping recorder:", e);
         }
+      }
+      
+      // Clear any timers
+      if (this.transcribeTimer) {
+        clearInterval(this.transcribeTimer);
+        this.transcribeTimer = null;
       }
       
       // Clean up audio context
       if (this.audioContext && this.audioContext.state !== 'closed') {
         try {
           await this.audioContext.close();
+          this.audioContext = null;
         } catch (e) {
           console.error("Error closing audio context:", e);
         }
       }
+      
+      console.log("Recording cleanup complete");
     }
   }
 }
