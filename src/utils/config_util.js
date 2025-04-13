@@ -5,21 +5,16 @@ function gpt_system_prompt() {
     return localStorage.getItem("gpt_system_prompt")
 }
 
-function azure_language() {
-    return localStorage.getItem("azure_language") || "en-US"
-}
-
-function azure_region() {
-    return localStorage.getItem("azure_region") || "eastasia"
+function speech_language() {
+    return localStorage.getItem("speech_language") || "en"
 }
 
 function gpt_model() {
-    return localStorage.getItem("gpt_model") || "gpt-3.5-turbo"
+    return localStorage.getItem("gpt_model") || "gpt-4o"
 }
 
 export default {
     gpt_system_prompt,
-    azure_language,
-    azure_region,
+    speech_language,
     gpt_model
 }

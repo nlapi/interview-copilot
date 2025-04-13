@@ -48,7 +48,7 @@
 import Assert from "assert-js"
 import LoadingIcon from "@/components/LoadingIcon.vue";
 import MyTimer from "@/components/MyTimer.vue";
-import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
+import Recorder from 'recorder-js';
 import OpenAI from "openai";
 import config_util from "../utils/config_util"
 
@@ -75,6 +75,13 @@ export default {
       copilot_stopping: false,
       show_ai_thinking_effect: false,
       popStyle: {},
+      recorder: null,
+      audioContext: null,
+      audioChunks: [],
+      isRecording: false,
+      recordingInterval: null,
+      silentIntervals: 0,
+      transcribeTimer: null
     }
   },
   async mounted() {
@@ -84,6 +91,8 @@ export default {
     }
   },
   beforeDestroy() {
+    // Clean up any resources
+    this.cleanupRecording();
   },
   methods: {
     async askCurrentText() {
@@ -101,6 +110,7 @@ export default {
         }
 
         const openai = new OpenAI({apiKey: apiKey, dangerouslyAllowBrowser: true})
+        // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         const stream = await openai.chat.completions.create({
           model: model,
           messages: [{role: "user", content: content}],
@@ -122,68 +132,158 @@ export default {
     },
     async startCopilot() {
       this.copilot_starting = true
-      const token = localStorage.getItem("azure_token")
-      const region = config_util.azure_region()
-      const language = config_util.azure_language()
       const openai_key = localStorage.getItem("openai_key")
-      console.log({region, language})
+      const language = config_util.speech_language()
+      
       try {
         if (!openai_key) {
           throw new Error("You should setup Open AI API Token")
         }
-        if (!token) {
-          throw new Error("You should setup Azure token")
-        }
-        if (!region) {
-          throw new Error("You should setup Azure region")
-        }
+        
+        // Create audio context and recorder
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.recorder = new Recorder(this.audioContext, {
+          onAnalysed: data => {
+            // Optional: You can use this for visualization if needed
+          }
+        });
 
-        const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(token, region);
-        speechConfig.speechRecognitionLanguage = language;
-        const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
-        this.recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+        // Get user media (microphone)
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        await this.recorder.init(stream);
+        this.recorder.start();
+        this.isRecording = true;
+        
+        // Set up continuous transcription
+        this.audioChunks = [];
+        this.setupTranscriptionTimer();
+        
+        // Start the UI components
+        this.copilot_starting = false
+        this.state = "ing"
+        this.$refs.MyTimer.start()
+        window.console.log("recognition started");
       } catch (e) {
-        this.currentText = e
+        this.currentText = "Start Failed: " + e.message;
         this.copilot_starting = false
         return
       }
-
-      const recognizer = this.recognizer
-      const sdk = SpeechSDK
-
-
-      recognizer.recognized = (sender, event) => {
-        if (sdk.ResultReason.RecognizedSpeech === event.result.reason && event.result.text.length > 0) {
-          const text = event.result.text
-          this.currentText = this.currentText + "\n" + text
-        } else if (sdk.ResultReason.NoMatch === event.result.reason) {
-          console.log("Speech could not be recognized")
-        }
-      };
-
-      recognizer.startContinuousRecognitionAsync(
-          () => {
-            this.copilot_starting = false
-            this.state = "ing"
-            this.$refs.MyTimer.start()
-            window.console.log("recognition started");
-          },
-          (err) => {
-            this.copilot_starting = false
-            this.currentText = "Start Failed:" + err
-            window.console.error("recogniton start failed", err);
-          })
     },
-    userStopCopilot() {
-      this.copilot_stopping = true
-      this.recognizer.stopContinuousRecognitionAsync(() => {
-        console.log("stoped")
-        this.copilot_stopping = false
-        this.state = "end"
-        this.$refs.MyTimer.stop()
-      }, (err) => {
-        console.log("err:", err)
-      })
+    
+    setupTranscriptionTimer() {
+      // Transcribe every 5 seconds
+      this.transcribeTimer = setInterval(async () => {
+        if (this.isRecording && this.audioChunks.length > 0) {
+          await this.transcribeAudio();
+        }
+      }, 5000);
+    },
+    
+    async transcribeAudio() {
+      try {
+        // Stop recording temporarily to get the audio data
+        const { buffer } = await this.recorder.stop();
+        
+        // Convert audio buffer to blob
+        const audioBlob = new Blob([buffer], { type: 'audio/wav' });
+        
+        // Send to OpenAI for transcription
+        const apiKey = localStorage.getItem("openai_key");
+        const language = config_util.speech_language();
+        
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'recording.wav');
+        formData.append('model', 'whisper-1');
+        if (language) {
+          formData.append('language', language);
+        }
+        
+        // Use fetch for the API call
+        const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Transcription failed: ${response.statusText}`);
+        }
+        
+        const { text } = await response.json();
+        
+        if (text && text.trim()) {
+          // Add the transcribed text to the display
+          this.currentText = this.currentText ? this.currentText + "\n" + text : text;
+        }
+        
+        // Restart recording
+        if (this.isRecording) {
+          await this.recorder.start();
+        }
+      } catch (error) {
+        console.error('Transcription error:', error);
+        // Restart recording despite error
+        if (this.isRecording) {
+          await this.recorder.start();
+        }
+      }
+    },
+    
+    async userStopCopilot() {
+      this.copilot_stopping = true;
+      
+      try {
+        await this.cleanupRecording();
+        
+        // Update UI
+        console.log("Stopped recording");
+        this.copilot_stopping = false;
+        this.state = "end";
+        this.$refs.MyTimer.stop();
+      } catch (err) {
+        console.error("Error stopping recording:", err);
+        this.copilot_stopping = false;
+        this.state = "end";
+        this.$refs.MyTimer.stop();
+      }
+    },
+    
+    async cleanupRecording() {
+      // Clear the transcription timer
+      if (this.transcribeTimer) {
+        clearInterval(this.transcribeTimer);
+        this.transcribeTimer = null;
+      }
+      
+      // Do one final transcription if we're recording
+      if (this.isRecording && this.recorder) {
+        try {
+          await this.transcribeAudio();
+        } catch (e) {
+          console.error("Error during final transcription:", e);
+        }
+      }
+      
+      // Stop recording
+      this.isRecording = false;
+      if (this.recorder) {
+        try {
+          await this.recorder.stop();
+        } catch (e) {
+          console.error("Error stopping recorder:", e);
+        }
+      }
+      
+      // Clean up audio context
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        try {
+          await this.audioContext.close();
+        } catch (e) {
+          console.error("Error closing audio context:", e);
+        }
+      }
     }
   }
 }
