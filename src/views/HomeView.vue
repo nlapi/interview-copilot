@@ -12,7 +12,27 @@
           <el-button icon="el-icon-delete" :disabled="!currentText" @click="clearASRContent">
             Clear Text
           </el-button>
+          <el-button icon="el-icon-edit" @click="showTextInputDialog">
+            Manual Input
+          </el-button>
         </div>
+        
+        <!-- Manual Text Input Dialog -->
+        <el-dialog
+          title="Enter or Paste Text"
+          :visible.sync="textInputDialogVisible"
+          width="50%">
+          <el-input
+            type="textarea"
+            :rows="10"
+            placeholder="Enter or paste your text here..."
+            v-model="manualInputText">
+          </el-input>
+          <span slot="footer" class="dialog-footer">
+            <el-button @click="textInputDialogVisible = false">Cancel</el-button>
+            <el-button type="primary" @click="submitManualText">Submit</el-button>
+          </span>
+        </el-dialog>
       </div>
       <div class="box" style="border-left: none;">
         <div class="func_desc">
@@ -81,7 +101,9 @@ export default {
       isRecording: false,
       recordingInterval: null,
       silentIntervals: 0,
-      transcribeTimer: null
+      transcribeTimer: null,
+      textInputDialogVisible: false,
+      manualInputText: ''
     }
   },
   async mounted() {
@@ -129,6 +151,21 @@ export default {
     },
     clearASRContent() {
       this.currentText = ""
+    },
+    showTextInputDialog() {
+      this.textInputDialogVisible = true;
+      this.manualInputText = '';
+    },
+    submitManualText() {
+      if (this.manualInputText.trim()) {
+        // If there's already text, add a line break before new content
+        if (this.currentText.trim()) {
+          this.currentText += '\n';
+        }
+        // Add the manually entered text
+        this.currentText += this.manualInputText.trim();
+      }
+      this.textInputDialogVisible = false;
     },
     async startCopilot() {
       this.copilot_starting = true;
@@ -418,6 +455,12 @@ async function sleep(ms) {
 .error_msg {
   color: red;
   text-align: center;
+}
+
+.el-textarea__inner {
+  font-family: inherit;
+  line-height: 1.5;
+  font-size: 14px;
 }
 
 </style>
