@@ -279,8 +279,8 @@ export default {
       // Clean up RecordRTC
       if (this.recorder) {
         try {
-          // Get final audio and process it
-          console.log("Stopping RecordRTC and getting final audio...");
+          // Stop recording but don't process the final audio as it causes duplication
+          console.log("Stopping RecordRTC...");
           
           const promise = new Promise((resolve) => {
             this.recorder.stopRecording(() => {
@@ -288,10 +288,8 @@ export default {
                 const blob = this.recorder.getBlob();
                 console.log("Final recording blob size:", blob.size);
                 
-                if (blob && blob.size > 1000) {
-                  // Process the final audio chunk if it's large enough
-                  this.processAudioChunk(blob);
-                }
+                // Note: We're skipping processing the final blob to avoid duplication
+                // The audio chunks processed during recording are sufficient
                 
                 // Clean up recorder
                 this.recorder.destroy();
