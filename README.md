@@ -53,11 +53,19 @@ OpenAI services instead of Azure's speech recognition.
 
 ## Using the Application
 
+### Speech Recognition
 1. Click "Start Copilot" to begin recording
 2. Speak clearly into your microphone
 3. The application will continuously transcribe your speech
 4. Click "Stop Copilot" when finished
-5. Click "Ask GPT" to get AI-powered responses to the transcribed text
+
+### Manual Text Input
+1. Click "Manual Input" to open the text input dialog
+2. Type or paste your text into the dialog
+3. Click "Submit" to add the text to the transcription area
+
+### Getting AI Response
+1. After adding text (via speech or manual input), click "Ask GPT" to get AI-powered responses to the transcribed text
 
 ## Development
 
@@ -88,6 +96,8 @@ npm run build
 - Replaced Azure Speech Service with OpenAI's Whisper model
 - Updated to use GPT-4o as the default model
 - Improved audio recording using RecordRTC
+- Added manual text input feature for pasting questions and problems
+- Fixed duplicate text issue when stopping recording
 - Added more detailed error handling
 - Enhanced user interface for better feedback
 
