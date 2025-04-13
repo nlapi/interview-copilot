@@ -173,7 +173,7 @@ export default {
     setupTranscriptionTimer() {
       // Transcribe every 5 seconds
       this.transcribeTimer = setInterval(async () => {
-        if (this.isRecording && this.audioChunks.length > 0) {
+        if (this.isRecording) {
           await this.transcribeAudio();
         }
       }, 5000);
@@ -181,15 +181,19 @@ export default {
     
     async transcribeAudio() {
       try {
+        console.log("Starting transcription process");
         // Stop recording temporarily to get the audio data
         const { buffer } = await this.recorder.stop();
+        console.log("Recording stopped, got buffer:", buffer ? "Buffer received" : "No buffer");
         
         // Convert audio buffer to blob
         const audioBlob = new Blob([buffer], { type: 'audio/wav' });
+        console.log("Created audio blob, size:", audioBlob.size);
         
         // Send to OpenAI for transcription
         const apiKey = localStorage.getItem("openai_key");
         const language = config_util.speech_language();
+        console.log("Using language for transcription:", language);
         
         const formData = new FormData();
         formData.append('file', audioBlob, 'recording.wav');
@@ -198,6 +202,7 @@ export default {
           formData.append('language', language);
         }
         
+        console.log("Sending transcription request to OpenAI");
         // Use fetch for the API call
         const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
@@ -207,25 +212,35 @@ export default {
           body: formData
         });
         
+        console.log("Got response from OpenAI:", response.status, response.statusText);
+        
         if (!response.ok) {
           throw new Error(`Transcription failed: ${response.statusText}`);
         }
         
-        const { text } = await response.json();
+        const result = await response.json();
+        console.log("Transcription result:", result);
+        const text = result.text;
         
         if (text && text.trim()) {
           // Add the transcribed text to the display
           this.currentText = this.currentText ? this.currentText + "\n" + text : text;
+          console.log("Added text to display:", text);
         }
         
         // Restart recording
         if (this.isRecording) {
+          console.log("Restarting recording");
           await this.recorder.start();
         }
       } catch (error) {
-        console.error('Transcription error:', error);
+        console.error('Transcription error:', error.toString());
+        console.error('Error details:', error.message, error.stack);
+        // Show error in the UI for debugging
+        this.currentText += "\nError: " + error.toString();
         // Restart recording despite error
         if (this.isRecording) {
+          console.log("Restarting recording after error");
           await this.recorder.start();
         }
       }
