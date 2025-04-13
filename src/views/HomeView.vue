@@ -198,8 +198,15 @@ export default {
           throw new Error("No audio data recorded. Please check your microphone permission and try speaking louder.");
         }
         
-        // Convert audio buffer to blob
-        const audioBlob = new Blob([buffer], { type: 'audio/wav' });
+        // We need to properly encode the audio as a WAV file
+        // First, check that we have a valid buffer
+        if (!buffer || !buffer.length) {
+          throw new Error("No audio data recorded");
+        }
+        
+        // For testing purposes, let's try MP3 format instead
+        // The recorder.js library should return WAV data already
+        const audioBlob = new Blob([buffer], { type: 'audio/mp3' });
         console.log("Created audio blob, size:", audioBlob.size, "bytes");
         
         if (audioBlob.size < 100) {
@@ -212,7 +219,7 @@ export default {
         console.log("Using language for transcription:", language);
         
         const formData = new FormData();
-        formData.append('file', audioBlob, 'recording.wav');
+        formData.append('file', audioBlob, 'recording.mp3');  // Changed filename to match the MIME type
         formData.append('model', 'whisper-1');
         if (language) {
           formData.append('language', language);
