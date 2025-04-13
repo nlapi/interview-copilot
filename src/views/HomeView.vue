@@ -183,12 +183,28 @@ export default {
       try {
         console.log("Starting transcription process");
         // Stop recording temporarily to get the audio data
-        const { buffer } = await this.recorder.stop();
-        console.log("Recording stopped, got buffer:", buffer ? "Buffer received" : "No buffer");
+        let buffer;
+        try {
+          const result = await this.recorder.stop();
+          buffer = result.buffer;
+          console.log("Recording stopped, got buffer:", buffer ? "Buffer received" : "No buffer");
+          console.log("Buffer type:", buffer ? typeof buffer : "N/A", "Buffer length:", buffer ? buffer.length : 0);
+        } catch (e) {
+          console.error("Error stopping recorder:", e);
+          throw new Error("Failed to get audio data: " + e.message);
+        }
+        
+        if (!buffer || buffer.length === 0) {
+          throw new Error("No audio data recorded. Please check your microphone permission and try speaking louder.");
+        }
         
         // Convert audio buffer to blob
         const audioBlob = new Blob([buffer], { type: 'audio/wav' });
-        console.log("Created audio blob, size:", audioBlob.size);
+        console.log("Created audio blob, size:", audioBlob.size, "bytes");
+        
+        if (audioBlob.size < 100) {
+          throw new Error("Audio recording is too small (size: " + audioBlob.size + " bytes). Please try speaking louder.");
+        }
         
         // Send to OpenAI for transcription
         const apiKey = localStorage.getItem("openai_key");
@@ -204,6 +220,8 @@ export default {
         
         console.log("Sending transcription request to OpenAI");
         // Use fetch for the API call
+        console.log("API Key length:", apiKey ? apiKey.length : 0);
+        
         const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
           headers: {
@@ -215,7 +233,23 @@ export default {
         console.log("Got response from OpenAI:", response.status, response.statusText);
         
         if (!response.ok) {
-          throw new Error(`Transcription failed: ${response.statusText}`);
+          // Try to get more info about the error
+          let errorText = response.statusText;
+          try {
+            const errorData = await response.json();
+            console.error("Error data:", JSON.stringify(errorData));
+            errorText = errorData.error?.message || errorData.message || errorText;
+          } catch (e) {
+            console.error("Could not parse error response:", e);
+            try {
+              errorText = await response.text();
+              console.error("Error text:", errorText);
+            } catch (e2) {
+              console.error("Could not get error text:", e2);
+            }
+          }
+          
+          throw new Error(`Transcription failed (${response.status}): ${errorText}`);
         }
         
         const result = await response.json();
