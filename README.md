@@ -97,9 +97,29 @@ npm run build
 - Updated to use GPT-4o as the default model
 - Improved audio recording using RecordRTC
 - Added manual text input feature for pasting questions and problems
+- Added desktop application with hide functionality for interviews
+- Added screen sharing detection to auto-hide the application
 - Fixed duplicate text issue when stopping recording
 - Added more detailed error handling
 - Enhanced user interface for better feedback
+
+## Desktop Application
+
+The project now includes a desktop application that can be installed on Windows. The desktop app provides additional features specifically designed for use during technical interviews:
+
+### Key Features
+- **Hide/Show Functionality**: Quickly hide the application during interviews with keyboard shortcut `Ctrl+Shift+I`
+- **System Tray Access**: Control the application from the system tray even when hidden
+- **Screen Sharing Detection**: Automatically hide when screen sharing is detected
+- **Stealth Mode**: Dim the appearance with `Ctrl+Alt+S` for less noticeable use
+
+### Building the Desktop App
+1. Clone this repository
+2. Run `npm install` to install dependencies
+3. Run the build script: `build-windows.bat` (Windows)
+4. Find the installer in the `electron-dist` folder
+
+See [DESKTOP_APP_GUIDE.md](DESKTOP_APP_GUIDE.md) for detailed instructions on using the desktop application.
 
 ## License
 MIT License

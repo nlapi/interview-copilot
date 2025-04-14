@@ -8,6 +8,15 @@
       <el-menu-item index="/setting">Setting</el-menu-item>
     </el-menu>
     <router-view class="router_view"/>
+    
+    <!-- Notification component for app status -->
+    <HideNotification 
+      :visible.sync="notificationVisible"
+      :type="notificationType"
+      :title="notificationTitle"
+      :message="notificationMessage"
+      :duration="5000"
+    />
   </div>
 </template>
 
@@ -41,48 +50,126 @@
 .router_view {
   margin-top: 10px;
 }
+
+/* Keyboard shortcut indicator */
+.keyboard-shortcut {
+  display: inline-block;
+  padding: 2px 4px;
+  background: #f1f1f1;
+  border-radius: 3px;
+  border: 1px solid #ddd;
+  color: #333;
+  font-family: monospace;
+  margin: 0 2px;
+}
 </style>
 <script>
-import {mapGetters} from 'vuex';
+import { mapGetters } from 'vuex';
+import HideNotification from '@/components/HideNotification.vue';
 
 export default {
   name: 'App',
-  props: {},
+  components: {
+    HideNotification
+  },
   computed: {},
-  beforeMount() {
-  },
-  mounted() {
-
-  },
   data() {
     return {
       activeIndex: "/",
       isScreenShared: false,
-      isStealthMode: false
+      isStealthMode: false,
+      notificationVisible: false,
+      notificationType: 'info',
+      notificationTitle: '',
+      notificationMessage: '',
     }
   },
-  methods: {},
+  methods: {
+    showNotification(type, title, message) {
+      this.notificationType = type;
+      this.notificationTitle = title;
+      this.notificationMessage = message;
+      this.notificationVisible = true;
+    },
+    toggleStealthMode() {
+      this.isStealthMode = !this.isStealthMode;
+      console.log('Stealth mode toggled:', this.isStealthMode);
+      
+      if (this.isStealthMode) {
+        this.showNotification(
+          'warning',
+          'Stealth Mode Activated', 
+          'The application appearance has been dimmed. Press Ctrl+Alt+S to toggle.'
+        );
+      } else {
+        this.showNotification(
+          'success',
+          'Stealth Mode Deactivated', 
+          'Application returned to normal appearance.'
+        );
+      }
+    }
+  },
   mounted() {
+    console.log("App mounted");
+    
     // Check if we're in Electron environment
     if (window.electronAPI) {
+      console.log("Electron API detected");
+      
       // Listen for screen sharing status changes
       window.electronAPI.onScreenSharingStatusChange((isSharing) => {
         console.log('Screen sharing detected:', isSharing);
+        
+        // Only show notification if the state has changed
+        if (isSharing && !this.isScreenShared) {
+          this.showNotification(
+            'warning',
+            'Screen Sharing Detected',
+            'Application will be automatically hidden. The window will reappear when screen sharing ends.'
+          );
+        } else if (!isSharing && this.isScreenShared) {
+          this.showNotification(
+            'info',
+            'Screen Sharing Ended',
+            'Application visibility has been restored.'
+          );
+        }
+        
         this.isScreenShared = isSharing;
         this.isStealthMode = isSharing;
       });
+      
+      // Listen for window visibility changes
+      window.electronAPI.onWindowVisibilityChange((isVisible) => {
+        console.log('Window visibility changed:', isVisible);
+        
+        if (isVisible) {
+          this.showNotification(
+            'success',
+            'Window Visible',
+            'Press Ctrl+Shift+I to hide the window during an interview.'
+          );
+        }
+      });
     }
 
-    // Also add keyboard shortcut for toggling stealth mode manually (Ctrl+Alt+S)
+    // Add keyboard shortcut for toggling stealth mode manually (Ctrl+Alt+S)
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.altKey && e.key === 's') {
-        this.isStealthMode = !this.isStealthMode;
-        console.log('Stealth mode toggled:', this.isStealthMode);
+        this.toggleStealthMode();
       }
     });
+    
+    // Show initial notification about keyboard shortcuts
+    setTimeout(() => {
+      this.showNotification(
+        'info',
+        'Keyboard Shortcuts',
+        'Use <span class="keyboard-shortcut">Ctrl+Shift+I</span> to hide/show window. ' +
+        'Use <span class="keyboard-shortcut">Ctrl+Alt+S</span> to toggle stealth mode (dimmed appearance).'
+      );
+    }, 2000);
   }
-
-
 }
-
 </script>
