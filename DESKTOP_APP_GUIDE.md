@@ -43,18 +43,28 @@ If you prefer not to install the application permanently, you can also download 
 
 Interview Copilot provides several ways to hide the application during your interviews:
 
-#### Keyboard Shortcut
-- Press `Ctrl+Shift+I` to instantly hide/show the window.
-- This is the recommended method for quickly toggling visibility during an interview.
+#### Keyboard Shortcuts
+- Press `Ctrl+Shift+I` or `Ctrl+Alt+H` to instantly hide/show the window.
+- Press `Ctrl+Alt+R` to start recording.
+- Press `Ctrl+Alt+S` to stop recording.
+- Press `Ctrl+Alt+G` to ask GPT for a response to the current text.
+- These shortcuts work even when the window is not in focus, making it easy to control the app discreetly during interviews.
 
 #### System Tray
 - The application runs in the system tray even when the main window is hidden.
-- Right-click the tray icon and select "Show/Hide App" to toggle visibility.
+- Right-click the tray icon to access these options:
+  - Show/Hide App: Toggle the window visibility
+  - Interview Mode: Configure auto-hide/show behaviors
+  - Start Recording: Start speech recognition (same as clicking "Start Copilot")
+  - Stop Recording: Stop speech recognition (same as clicking "Stop Copilot")
+  - Ask GPT: Send your transcribed text to GPT for a response
 - Double-click the tray icon to toggle visibility.
 
-#### Stealth Mode
-- Press `Ctrl+Alt+S` to toggle "Stealth Mode" which dims the application's appearance.
-- This makes the application less noticeable without completely hiding it.
+#### Auto-Hide Behaviors
+- The app has several automatic behaviors to prevent detection:
+  - Auto-hide when screen sharing is detected
+  - Option to auto-show when screen sharing ends (configurable in tray menu)
+  - Immediate hiding when video conferencing tools are detected (Zoom, Teams, etc.)
 
 ### Automatic Screen Sharing Detection
 

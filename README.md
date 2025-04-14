@@ -111,7 +111,7 @@ The project now includes a desktop application that can be installed on Windows.
 - **Hide/Show Functionality**: Quickly hide the application during interviews with keyboard shortcut `Ctrl+Shift+I`
 - **System Tray Access**: Control the application from the system tray even when hidden
 - **Screen Sharing Detection**: Automatically hide when screen sharing is detected
-- **Stealth Mode**: Dim the appearance with `Ctrl+Alt+S` for less noticeable use
+- **Global Keyboard Shortcuts**: Control recording (`Ctrl+Alt+R`), stopping (`Ctrl+Alt+S`), and GPT requests (`Ctrl+Alt+G`) without the window in focus
 
 ### Building the Desktop App
 1. Clone this repository
