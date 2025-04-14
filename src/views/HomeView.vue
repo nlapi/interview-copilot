@@ -111,10 +111,21 @@ export default {
     if (this.isDevMode) {
       // this.currentText = demo_text
     }
+    
+    // Set up electron IPC listeners if running in electron
+    if (window.electron) {
+      console.log("App mounted")
+      this.setupElectronListeners();
+    }
   },
   beforeDestroy() {
     // Clean up any resources
     this.cleanupRecording();
+    
+    // Remove electron listeners if they exist
+    if (window.electron) {
+      this.removeElectronListeners();
+    }
   },
   methods: {
     async askCurrentText() {
@@ -362,6 +373,74 @@ export default {
       }
       
       console.log("Recording cleanup complete");
+    },
+    
+    // Setup electron IPC event listeners for desktop app functionality
+    setupElectronListeners() {
+      if (!window.electron || !window.electron.ipcRenderer) {
+        console.log("Electron IPC not available, skipping listener setup");
+        return;
+      }
+      
+      console.log("Setting up electron IPC listeners");
+      
+      // Listen for tray commands
+      window.electron.ipcRenderer.on('tray-start-recording', () => {
+        console.log("Received tray-start-recording command");
+        if (this.state === "end") {
+          this.startCopilot();
+        }
+      });
+      
+      window.electron.ipcRenderer.on('tray-stop-recording', () => {
+        console.log("Received tray-stop-recording command");
+        if (this.state === "ing") {
+          this.userStopCopilot();
+        }
+      });
+      
+      window.electron.ipcRenderer.on('tray-ask-gpt', () => {
+        console.log("Received tray-ask-gpt command");
+        if (this.isGetGPTAnswerAvailable) {
+          this.askCurrentText();
+        }
+      });
+      
+      // Listen for screen sharing status
+      window.electron.ipcRenderer.on('screen-sharing-status', (isScreenBeingShared) => {
+        console.log("Screen sharing status changed:", isScreenBeingShared);
+        // We could show a notification here if needed
+        if (isScreenBeingShared) {
+          this.$notify({
+            title: 'Screen Sharing Detected',
+            message: 'The app has been automatically hidden.',
+            type: 'warning',
+            duration: 3000
+          });
+        }
+      });
+      
+      // Listen for window visibility changes
+      window.electron.ipcRenderer.on('window-visibility-change', (isVisible) => {
+        console.log("Window visibility changed:", isVisible);
+        // Could update UI based on visibility state
+      });
+    },
+    
+    // Remove electron IPC event listeners
+    removeElectronListeners() {
+      if (!window.electron || !window.electron.ipcRenderer) {
+        return;
+      }
+      
+      console.log("Removing electron IPC listeners");
+      
+      // Remove all listeners
+      window.electron.ipcRenderer.removeAllListeners('tray-start-recording');
+      window.electron.ipcRenderer.removeAllListeners('tray-stop-recording');
+      window.electron.ipcRenderer.removeAllListeners('tray-ask-gpt');
+      window.electron.ipcRenderer.removeAllListeners('screen-sharing-status');
+      window.electron.ipcRenderer.removeAllListeners('window-visibility-change');
     }
   }
 }
