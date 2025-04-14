@@ -4,7 +4,36 @@
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build"
+    "build": "vue-cli-service build",
+    "electron:dev": "concurrently \"npm run serve\" \"electron electron.js\"",
+    "electron:build": "vue-cli-service build && electron-builder",
+    "electron:start": "electron electron.js"
+  },
+  "main": "electron.js",
+  "build": {
+    "appId": "com.interviewcopilot.app",
+    "productName": "Interview Copilot",
+    "files": [
+      "dist/**/*",
+      "electron.js",
+      "preload.js"
+    ],
+    "directories": {
+      "buildResources": "public",
+      "output": "electron-dist"
+    },
+    "win": {
+      "target": "portable",
+      "icon": "public/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "public/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "public/icon.png"
+    }
   },
   "dependencies": {
     "@vue/cli": "^5.0.8",
